@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>井字棋 — 三子连线</title>
+<meta name="theme-color" content="#0a0a1a" />
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a0a1a;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;display:flex;flex-direction:column;align-items:center;min-height:100dvh;color:#c0c8ff;overflow:hidden}
+h1{margin-top:16px;font-size:20px;letter-spacing:.05em}
+#modes{display:flex;gap:8px;margin:12px 0}
+#modes button{padding:6px 16px;border-radius:16px;border:1px solid #2a2a60;background:transparent;color:#7a80c0;font-size:12px;cursor:pointer}
+#modes button.active{background:#3030a0;color:#c0c8ff;border-color:#3030a0}
+#board{display:grid;grid-template-columns:repeat(3,1fr);width:min(82vw,320px);height:min(82vw,320px);gap:8px;background:#14142e;padding:8px;border-radius:12px;box-shadow:0 0 26px rgba(48,48,160,.35)}
+.cell{background:#23234a;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:min(20vw,64px);font-weight:800;cursor:pointer;user-select:none}
+.cell.X{color:#5ad0e0}.cell.O{color:#e08a4a}
+.cell.win{background:linear-gradient(135deg,#2a6a40,#3a9050)}
+.cell:not(.X):not(.O):hover{background:#30305c}
+#status{margin-top:14px;font-size:16px;min-height:24px}
+#restart{margin-top:10px;padding:9px 26px;border-radius:22px;background:#3030a0;border:none;color:#c0c8ff;font-size:13px;cursor:pointer}
+#restart:hover{background:#4444c0}
+footer{font-size:11px;color:#1a1a40;padding:10px}
+</style>
+</head>
+<body>
+<h1>井字棋</h1>
+<div id="modes">
+  <button data-m="cpu" class="active">人机对战</button>
+  <button data-m="pvp">双人对战</button>
+</div>
+<div id="board"></div>
+<div id="status">X 先手</div>
+<button id="restart">重新开始</button>
+<footer>三子连成一线即可获胜 · 人机模式中你执 X</footer>
+<script>
+"use strict";
+const boardEl=document.getElementById('board');
+const statusEl=document.getElementById('status');
+let g,current='X',mode='cpu',gameOver=false,winnerLine=null;
+function start(){
+  g=Array(9).fill(null);current='X';gameOver=false;winnerLine=null;
+  statusEl.textContent=mode==='cpu'?'你执 X，先手':'X 先手';render();
+}
+document.querySelectorAll('#modes button').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('#modes button').forEach(x=>x.classList.remove('active'));
+  b.classList.add('active');mode=b.dataset.m;start();
+}));
+function lines(){return[[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];}
+function check(){
+  for(const l of lines()){
+    const[a,b,c]=l;
+    if(g[a]&&g[a]===g[b]&&g[a]===g[c]){winnerLine=l;return g[a];}
+  }
+  return g.includes(null)?null:'draw';
+}
+function onCell(i){
+  if(gameOver||g[i])return;
+  g[i]=current;current=current==='X'?'O':'X';
+  const res=check();
+  if(res){gameOver=true;
+    if(res==='draw')statusEl.textContent='🤝 平局';
+    else statusEl.textContent=(mode==='cpu'?(res==='X'?'🎉 你赢了！':'🤖 AI 获胜'):(res+' 获胜'));
+  }else{
+    statusEl.textContent=mode==='cpu'?'轮到 '+current+(current==='X'?' 你':' AI'):(current+' 的回合');
+  }
+  render();
+  if(!gameOver&&mode==='cpu'&&current==='O')setTimeout(ai,400);
+}
+function bestMove(){
+  let b=-1,best=-Infinity;
+  for(let i=0;i<9;i++)if(!g[i]){g[i]='O';const s=minimax(false);g[i]=null;if(s>best){best=s;b=i;}}
+  return b;
+}
+function minimax(max){
+  const r=check();
+  if(r==='O')return 10;if(r==='X')return -10;if(r==='draw')return 0;
+  if(max){let v=-Infinity;for(let i=0;i<9;i++)if(!g[i]){g[i]='O';v=Math.max(v,minimax(false));g[i]=null;}return v;}
+  else{let v=Infinity;for(let i=0;i<9;i++)if(!g[i]){g[i]='X';v=Math.min(v,minimax(true));g[i]=null;}return v;}
+}
+function ai(){if(gameOver)return;const m=bestMove();if(m>=0)onCell(m);}
+function render(){
+  boardEl.innerHTML='';
+  for(let i=0;i<9;i++){
+    const c=document.createElement('div');
+    c.className='cell'+(g[i]?(' '+g[i]):'');
+    if(winnerLine&&winnerLine.includes(i))c.classList.add('win');
+    c.textContent=g[i]||'';
+    c.addEventListener('click',()=>onCell(i));
+    boardEl.appendChild(c);
+  }
+}
+document.getElementById('restart').addEventListener('click',start);
+start();
+</script>
+</body>
+</html>

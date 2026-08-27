@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>弹球 — Pong</title>
+<meta name="theme-color" content="#0a0a1a" />
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a0a1a;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;display:flex;flex-direction:column;align-items:center;min-height:100dvh;color:#c0c8ff;overflow:hidden;touch-action:none}
+h1{margin-top:12px;font-size:20px;letter-spacing:.05em}
+#hud{display:flex;gap:40px;margin:8px 0 6px;font-size:18px}
+#hud #pScore{color:#5ad0e0}#hud #cScore{color:#e08a4a;font-weight:700}
+canvas#g{display:block;background:#050512;border:1px solid #1a1a40;border-radius:6px;touch-action:none;cursor:none}
+.controls{margin-top:10px}
+#start,#restart{padding:9px 26px;border-radius:22px;background:#3030a0;border:none;color:#c0c8ff;font-size:14px;cursor:pointer}
+#start:hover,#restart:hover{background:#4444c0}
+footer{font-size:11px;color:#1a1a40;padding:10px}
+</style>
+</head>
+<body>
+<h1>弹球</h1>
+<div id="hud"><span id="pScore">0</span><span>:</span><span id="cScore">0</span></div>
+<canvas id="g" width="480" height="360"></canvas>
+<div class="controls">
+  <button id="start" style="display:none">开始</button>
+  <button id="restart">重新发球</button>
+</div>
+<footer>移动左侧挡板接住小球，别让球从左边溜走 · 你 vs AI</footer>
+<script>
+"use strict";
+const cv=document.getElementById('g'),ctx=cv.getContext('2d');
+const W=cv.width,H=cv.height;
+const pScoreEl=document.getElementById('pScore'),cScoreEl=document.getElementById('cScore');
+const PAD={w:10,h:64,py:H/2-32,cy:H/2-32,speed:5.4};
+let ball={x:W/2,y:H/2,vx:3.6,vy:2,active:false};
+let pScore=0,cScore=0,running=false;
+const startBtn=document.getElementById('start'),restartBtn=document.getElementById('restart');
+function serve(toPlayer){
+  ball.x=W/2;ball.y=H/2;
+  const ang=(Math.random()-.5)*.9;
+  ball.vx=(toPlayer?1:-1)*(3.4+Math.random()*1.2);
+  ball.vy=Math.sin(ang)*4.2;
+  ball.active=false;
+}
+function resetScores(){pScore=0;cScore=0;pScoreEl.textContent=0;cScoreEl.textContent=0;}
+cv.addEventListener('mousemove',e=>{const r=cv.getBoundingClientRect();PAD.py=Math.max(0,Math.min(H-PAD.h,(e.clientY-r.top)*(H/r.height)));});
+cv.addEventListener('touchmove',e=>{e.preventDefault();const t=e.touches[0];const r=cv.getBoundingClientRect();PAD.py=Math.max(0,Math.min(H-PAD.h,(t.clientY-r.top)*(H/r.height)));},{passive:false});
+cv.addEventListener('click',()=>{if(!ball.active){ball.active=true;}});
+startBtn.addEventListener('click',()=>{startBtn.style.display='none';resetScores();running=true;serve(false);draw();});
+restartBtn.addEventListener('click',()=>{resetScores();if(!running){running=true;startBtn.style.display='none';}serve(false);ball.active=false;draw();});
+function resetGame(){resetScores();serve(false);}
+function loop(){
+  requestAnimationFrame(loop);
+  if(!running)return draw();
+  // AI
+  PAD.cy+=Math.max(-4.6,Math.min(4.6,(ball.y-(PAD.cy+PAD.h/2))*0.09));
+  PAD.cy=Math.max(0,Math.min(H-PAD.h,PAD.cy));
+  if(ball.active){
+    ball.x+=ball.vx;ball.y+=ball.vy;
+    if(ball.y<8){ball.y=8;ball.vy*=-1;}
+    if(ball.y>H-8){ball.y=H-8;ball.vy*=-1;}
+    // player paddle
+    if(ball.x-ballR<W/2&&ball.x<PAD.w+8&&ball.y>PAD.py&&ball.y<PAD.py+PAD.h&&ball.vx<0){
+      ball.vx=-ball.vx;const rel=(ball.y-(PAD.py+PAD.h/2))/(PAD.h/2);ball.vy=rel*4.4;ball.x=PAD.w+8;
+    }
+    // cpu paddle
+    if(ball.x+ballR>W-PAD.w-8&&ball.y>PAD.cy&&ball.y<PAD.cy+PAD.h&&ball.vx>0){
+      ball.vx=-ball.vx;const rel=(ball.y-(PAD.cy+PAD.h/2))/(PAD.h/2);ball.vy=rel*4.4;ball.x=W-PAD.w-8;
+    }
+    if(ball.x<0){cScore++;cScoreEl.textContent=cScore;serve(running?false:false);running=false;ball.active=false;draw();return;}
+    if(ball.x>W){pScore++;pScoreEl.textContent=pScore;serve(running?true:true);}
+  }
+  draw();
+}
+const ballR=6;
+function draw(){
+  ctx.fillStyle='#050512';ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle='#1a1a40';ctx.setLineDash([6,6]);ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(W/2,0);ctx.lineTo(W/2,H);ctx.stroke();ctx.setLineDash([]);
+  ctx.fillStyle='#5ad0e0';ctx.fillRect(4,PAD.py,PAD.w-4,PAD.h);
+  ctx.fillStyle='#e08a4a';ctx.fillRect(W-PAD.w+4,PAD.cy,PAD.w-4,PAD.h);
+  ctx.fillStyle='#ffd65a';ctx.beginPath();ctx.arc(ball.x,ball.y,ballR,0,7);ctx.fill();
+  if(!ball.active){
+    ctx.fillStyle='#7a80c0';ctx.font='14px sans-serif';ctx.textAlign='center';
+    ctx.fillText('点击画面 / 开始 发球',W/2,H/2+30);
+  }
+}
+// start in "menu" state: show start button, wait for player to begin
+running=false;ball.active=false;startBtn.style.display='inline-block';
+loop();
+</script>
+</body>
+</html>

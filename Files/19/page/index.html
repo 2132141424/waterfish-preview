@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>国际象棋 — 在线对弈</title>
+<meta name="theme-color" content="#0a0a1a" />
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a0a1a;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;display:flex;flex-direction:column;align-items:center;min-height:100dvh;color:#c0c8ff;overflow:hidden}
+h1{margin-top:14px;font-size:20px;font-weight:600;letter-spacing:.04em}
+#meta{display:flex;gap:14px;margin:8px 0 10px;font-size:13px;color:#7a80c0}
+#meta span b{color:#c0c8ff}
+#wrap{position:relative}
+#board{width:min(88vw,440px);height:min(88vw,440px);display:grid;grid-template-columns:repeat(8,1fr);border:3px solid #2a2a60;box-shadow:0 0 30px rgba(48,48,160,.35)}
+.cell{position:relative;display:flex;align-items:center;justify-content:center;font-size:min(9vw,42px);line-height:1;cursor:pointer}
+.cell.light{background:#c2c9e8}
+.cell.dark{background:#5a6aa8}
+.cell.sel::after{content:"";position:absolute;inset:0;background:rgba(255,220,90,.45)}
+.cell.hint::before{content:"";position:absolute;width:22%;height:22%;border-radius:50%;background:rgba(80,220,120,.6)}
+.cell.last{box-shadow:inset 0 0 0 3px rgba(90,200,255,.8)}
+.cell:hover{outline:2px solid #ffd65a;outline-offset:-2px}
+.rank{text-align:center;font-size:11px;color:#3a3a70;padding:2px 0}
+#status{margin-top:12px;font-size:15px;min-height:22px}
+#restart{margin-top:10px;padding:9px 26px;border-radius:22px;background:#3030a0;border:none;color:#c0c8ff;font-size:14px;cursor:pointer}
+#restart:hover{background:#4444c0}
+footer{font-size:11px;color:#1a1a40;padding:8px;flex-shrink:0}
+</style>
+</head>
+<body>
+<h1>国际象棋</h1>
+<div id="meta"><span>轮到<b id="turn">白方</b></span><span>将军<b id="check" style="display:none">🔴</b></span></div>
+<div id="wrap">
+  <div id="board"></div>
+</div>
+<div id="status"></div>
+<button id="restart">重新开始</button>
+<footer>在线对弈 · 本地人机对战 · 创作依据 GNU 通用公开许可证</footer>
+<script>
+"use strict";
+const ROYAL={p:1,n:3,b:3,r:5,q:9,k:0};
+let board,sel=null,moves=[],turn='w',gameOver=false,lastMove=null;
+const SYM={wk:'♔',wq:'♕',wr:'♖',wb:'♗',wn:'♘',wp:'♙',bk:'♚',bq:'♛',br:'♜',bb:'♝',bn:'♞',bp:'♟'};
+const boardEl=document.getElementById('board'),statusEl=document.getElementById('status');
+const turnEl=document.getElementById('turn'),checkEl=document.getElementById('check');
+function reset(){
+  board=Array.from({length:8},()=>Array(8).fill(null));
+  const back=['r','n','b','q','k','b','n','r'];
+  for(let c=0;c<8;c++){board[0][c]='b'+back[c];board[1][c]='bp';board[6][c]='wp';board[7][c]='w'+back[c];}
+  turn='w';gameOver=false;sel=null;moves=[];lastMove=null;render();
+}
+function pieceAt(r,c){return board[r][c];}
+function inB(r,c){return r>=0&&r<8&&c>=0&&c<8;}
+function pushIf(set,r,c){if(inB(r,c))set.push([r,c]);}
+function dirs(r,c){const p=board[r][c];const out=[];const rows=r,c2=c;
+  if(!p)return out;
+  const color=p[0];const en=color==='w'?'b':'w';
+  const pt=p[1];
+  if(pt==='p'){
+    const dr=color==='w'?-1:1;const sr=color==='w'?6:1;
+    if(inB(r+dr,c)&&!board[r+dr][c]){out.push([r+dr,c]);if(r===sr&&!board[r+2*dr][c])out.push([r+2*dr,c]);}
+    for(const dc of[-1,1]){if(inB(r+dr,c+dc)&&board[r+dr][c+dc]&&board[r+dr][c+dc][0]===en)out.push([r+dr,c+dc]);}
+    return out;
+  }
+  const vec=pt==='n'?[[2,1],[2,-1],[-2,1],[-2,-1],[1,2],[1,-2],[-1,2],[-1,-2]]:
+        pt==='k'?[[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]]:
+        pt==='r'?[[1,0],[-1,0],[0,1],[0,-1]]:
+        pt==='b'?[[1,1],[1,-1],[-1,1],[-1,-1]]:
+        pt==='q'?[[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]]:[];
+  if(pt==='n'||pt==='k'){
+    for(const[dr,dc]of vec){if(inB(r+dr,c+dc)&&(!board[r+dr][c+dc]||board[r+dr][c+dc][0]===en))out.push([r+dr,c+dc]);}
+    return out;
+  }
+  for(const[dr,dc]of vec){let rr=r+dr,cc=c+dc;while(inB(rr,cc)){if(board[rr][cc]===null){out.push([rr,cc]);}else{if(board[rr][cc][0]===en)out.push([rr,cc]);break;}rr+=dr;cc+=dc;}}
+  return out;
+}
+function kingPos(color){
+  for(let r=0;r<8;r++)for(let c=0;c<8;c++)if(board[r][c]===color+'k')return[r,c];
+  return null;
+}
+function underAttack(color,r,c){
+  for(let rr=0;rr<8;rr++)for(let cc=0;cc<8;cc++){
+    const p=board[rr][cc];if(!p||p[0]!==(color==='w'?'b':'w'))continue;
+    const m=dirs(rr,cc);
+    if(p[1]==='p'){const dr=p[0]==='w'?-1:1;if((rr+dr===r)&&(cc-1===c||cc+1===c))return true;continue;}
+    for(const[t]of m){if(t[0]===r&&t[1]===c)return true;}
+  }
+  return false;
+}
+function inCheck(color){const k=kingPos(color);if(!k)return false;return underAttack(color,k[0],k[1]);}
+function legalMoves(r,c){
+  const p=board[r][c];if(!p)return[];
+  const all=dirs(r,c),out=[];
+  for(const[r2,c2]of all){
+    const bak=board[r2][c2];
+    board[r2][c2]=p;board[r][c]=null;
+    const ok=!inCheck(p[0]);
+    board[r][c]=p;board[r2][c2]=bak;
+    if(ok)out.push([r2,c2]);
+  }
+  return out;
+}
+function hasMove(color){
+  for(let r=0;r<8;r++)for(let c=0;c<8;c++)
+    if(board[r][c]&&board[r][c][0]===color&&legalMoves(r,c).length)return true;
+  return false;
+}
+function onCell(e){
+  if(gameOver)return;
+  const idx=e.currentTarget._i;const r=idx>>3,c=idx&7;const p=board[r][c];
+  if(sel&&moves.some(m=>m[0]===r&&m[1]===c)){doMove(r,c);return;}
+  if(p&&p[0]===turn){sel=[r,c];moves=legalMoves(r,c);render();return;}
+  sel=null;moves=[];render();
+}
+function doMove(r,c){
+  const p=board[sel[0]][sel[1]];
+  board[r][c]=p;board[sel[0]][sel[1]]=null;lastMove=[sel,r,c];
+  // promotion
+  if(p[1]==='p'&&(r===0||r===7))board[r][c]=p[0]+'q';
+  turn=turn==='w'?'b':'w';sel=null;moves=[];
+  const chk=inCheck(turn);
+  let msg='';
+  if(!hasMove(turn)){gameOver=true;msg=chk?'将杀！'+winner()+' 获胜':'和棋（逼和）';}
+  else if(chk){turnEl.textContent=turn==='w'?'白方':'黑方';checkEl.style.display='inline';}
+  render();
+  if(msg){statusEl.textContent=msg;gameOver=true;render();}
+}
+function winner(){return turn==='b'?'白方':'黑方';}
+function render(){
+  boardEl.innerHTML='';
+  // board[0] is rank 8 (black back rank)
+  for(let r=0;r<8;r++)for(let c=0;c<8;c++){
+    const cell=document.createElement('div');
+    cell._i=r*8+c;
+    cell.className='cell '+((r+c)%2===0?'light':'dark');
+    const p=board[r][c];if(p)cell.textContent=SYM[p];
+    cell.style.color=p&&p[0]==='w'?'#f6f8ff':'#14182f';
+    if(sel&&sel[0]===r&&sel[1]===c)cell.classList.add('sel');
+    if(moves.some(m=>m[0]===r&&m[1]===c))cell.classList.add('hint');
+    if(lastMove&&((lastMove[1]===r&&lastMove[2]===c)))cell.classList.add('last');
+    cell.addEventListener('click',onCell);
+    boardEl.appendChild(cell);
+  }
+  if(!gameOver)turnEl.textContent=turn==='w'?'白方':'黑方';
+  if(!inCheck(turn)||gameOver)checkEl.style.display='none';
+}
+document.getElementById('restart').addEventListener('click',reset);
+reset();
+</script>
+</body>
+</html>

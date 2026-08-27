@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>黑白棋 — Othello</title>
+<meta name="theme-color" content="#0a0a1a" />
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a0a1a;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;display:flex;flex-direction:column;align-items:center;min-height:100dvh;color:#c0c8ff;overflow:hidden}
+h1{margin-top:14px;font-size:20px;letter-spacing:.05em}
+#hud{display:flex;gap:24px;margin:8px 0 10px;font-size:15px}
+.pills{display:flex;align-items:center;gap:6px}
+.dot{width:14px;height:14px;border-radius:50%;display:inline-block;border:2px solid #30306a}
+.dot.w{background:#f6f8ff}.dot.b{background:#14182f}
+#board{display:grid;grid-template-columns:repeat(8,1fr);width:min(88vw,400px);height:min(88vw,400px);background:#1a3a2a;border:3px solid #304a38;box-shadow:0 0 24px rgba(40,90,60,.35)}
+.cell{position:relative;display:flex;align-items:center;justify-content:center;border:1px solid #24402e}
+.cell::before{content:"";position:absolute;inset:7%;border-radius:50%;}
+.cell.w::before{background:radial-gradient(circle at 35% 30%,#fff,#d5d9ec)}
+.cell.b::before{background:radial-gradient(circle at 35% 30%,#33384a,#050508)}
+.cell.legal::after{content:"";position:absolute;width:24%;height:24%;border-radius:50%;background:rgba(255,223,120,.55);top:50%;left:50%;transform:translate(-50%,-50%);opacity:.9}
+.cell.prev{box-shadow:inset 0 0 0 3px #ffd65a}
+.cell:hover{outline:2px solid #7ae0b0;outline-offset:-2px}
+#status{margin-top:12px;font-size:15px;min-height:22px}
+#restart{margin-top:10px;padding:9px 26px;border-radius:22px;background:#3030a0;border:none;color:#c0c8ff;font-size:14px;cursor:pointer}
+#restart:hover{background:#4444c0}
+footer{font-size:11px;color:#1a1a40;padding:8px}
+</style>
+</head>
+<body>
+<h1>黑白棋</h1>
+<div id="hud">
+  <span class="pills"><span class="dot w"></span>你 <b id="scW">2</b></span>
+  <span class="pills"><span class="dot b"></span>AI <b id="scB">2</b></span>
+</div>
+<div id="board"></div>
+<div id="status"></div>
+<button id="restart" style="display:none">再来一局</button>
+<footer>人机对战 · 点击高亮格子落子，夹住的棋子全部翻转</footer>
+<script>
+"use strict";
+const N=8;
+let g,player='w',turn='w',gameOver=false,legals=[],prev=null;
+const boardEl=document.getElementById('board');
+const scW=document.getElementById('scW'),scB=document.getElementById('scB');
+const statusEl=document.getElementById('status'),restartBtn=document.getElementById('restart');
+function copy(g){return g.map(r=>r.slice());}
+function init(){
+  g=Array.from({length:N},()=>Array(N).fill(null));
+  g[3][3]='w';g[4][4]='w';g[3][4]='b';g[4][3]='b';
+  turn='w';gameOver=false;prev=null;restartBtn.style.display='none';statusEl.textContent='';calc();
+}
+function calcLegals(color){
+  const out=[];
+  const dirs=[[0,1],[0,-1],[1,0],[-1,0],[1,1],[1,-1],[-1,1],[-1,-1]];
+  for(let r=0;r<N;r++)for(let c=0;c<N;c++){
+    if(g[r][c])continue;
+    let ok=false;
+    for(const[dr,dc]of dirs){
+      let rr=r+dr,cc=c+dc,flip=0;
+      while(rr>=0&&rr<N&&cc>=0&&cc<N&&g[rr][cc]===other(color)){flip++;rr+=dr;cc+=dc;}
+      if(flip&&rr>=0&&rr<N&&cc>=0&&cc<N&&g[rr][cc]===color){ok=true;break;}
+    }
+    if(ok)out.push([r,c]);
+  }
+  return out;
+}
+function other(c){return c==='w'?'b':'w';}
+function apply(r,c,color,grid){
+  grid=grid||g;grid[r][c]=color;
+  const dirs=[[0,1],[0,-1],[1,0],[-1,0],[1,1],[1,-1],[-1,1],[-1,-1]];
+  for(const[dr,dc]of dirs){
+    let rr=r+dr,cc=c+dc,flip=[];
+    while(rr>=0&&rr<N&&cc>=0&&cc<N&&grid[rr][cc]===other(color)){flip.push([rr,cc]);rr+=dr;cc+=dc;}
+    if(rr>=0&&rr<N&&cc>=0&&cc<N&&grid[rr][cc]===color)for(const[fr,fc]of flip)grid[fr][fc]=color;
+  }
+}
+function count(){
+  let w=0,b=0;
+  for(let r=0;r<N;r++)for(let c=0;c<N;c++){if(g[r][c]==='w')w++;if(g[r][c]==='b')b++;}
+  return{w,b};
+}
+function calc(){
+  const rest=copy(g);
+  if(legals.length===0){trigger(turn);legals=calcLegals(turn);if(legals.length===0){end();render();return;}}
+  render();
+}
+function trigger(color){ void color; }
+function onCell(r,c){
+  if(gameOver||turn!==player)return;
+  const legal=legals.some(x=>x[0]===r&&x[1]===c);
+  if(!legal)return;
+  apply(r,c,turn);
+  const cnt=count();scW.textContent=cnt.w;scB.textContent=cnt.b;
+  turn=other(turn);legals=calcLegals(turn);
+  if(legals.length===0){turn=other(turn);legals=calcLegals(turn);}
+  if(legals.length===0){end();render();return;}
+  render();
+  if(turn==='b')setTimeout(ai,450);
+}
+function ai(){
+  if(gameOver)return;
+  legals=calcLegals('b');
+  if(legals.length===0){turn='w';legals=calcLegals('w');if(legals.length===0)return end();render();return;}
+  let best=null,bestScore=-1;
+  for(const[pos]of legals){
+    const tg=copy(g);apply(pos[0],pos[1],'b',tg);
+    const val=countB(tg);
+    if(val>bestScore){bestScore=val;best=pos;}
+  }
+  apply(best[0],best[1],'b');
+  const c=count();scW.textContent=c.w;scB.textContent=c.b;turn='w';legals=calcLegals('w');
+  render();
+}
+function countB(tg){
+  let b=0;for(let r=0;r<N;r++)for(let c=0;c<N;c++)if(tg[r][c]==='b')b++;
+  return b;
+}
+function end(){
+  gameOver=true;
+  const c=count();
+  let m;
+  if(c.w>c.b)m='你赢了！'+c.w+' : '+c.b;
+  else if(c.b>c.w)m='AI 获胜！'+c.b+' : '+c.w;
+  else m='平局 '+c.w+' : '+c.b;
+  statusEl.textContent=m;restartBtn.style.display='inline-block';
+  render();
+}
+function render(){
+  boardEl.innerHTML='';
+  for(let r=0;r<N;r++)for(let c=0;c<N;c++){
+    const cell=document.createElement('div');
+    cell.className='cell';
+    if(g[r][c])cell.classList.add(g[r][c]);
+    if(!gameOver&&turn===player&&legals.some(x=>x[0]===r&&x[1]===c))cell.classList.add('legal');
+    if(prev&&prev[0]===r&&prev[1]===c)cell.classList.add('prev');
+    cell.addEventListener('click',()=>onCell(r,c));
+    boardEl.appendChild(cell);
+  }
+  statusEl.textContent = gameOver?statusEl.textContent:(turn===player?'轮到你落子':'AI 思考中…');
+}
+restartBtn.addEventListener('click',init);
+init();
+(turn=player);calc();
+</script>
+</body>
+</html>

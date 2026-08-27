@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>24点 — 数学速算</title>
+<meta name="theme-color" content="#0a0a1a" />
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a0a1a;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;display:flex;flex-direction:column;align-items:center;min-height:100dvh;color:#c0c8ff;overflow:hidden}
+h1{margin-top:16px;font-size:20px;letter-spacing:.05em}
+.sub{font-size:12px;color:#6060a0;margin:6px 0 12px}
+#cards{display:flex;gap:12px;margin-bottom:14px}
+.card{width:52px;height:72px;border-radius:8px;background:linear-gradient(135deg,#f2f4ff,#c8cff0);color:#1c2350;display:flex;align-items:center;justify-content:center;font-size:30px;font-weight:700;box-shadow:0 4px 10px rgba(0,0,0,.4);border:2px solid #3030a0}
+#expr{width:min(88vw,380px);height:44px;border-radius:10px;border:1px solid #2a2a60;background:#0d0d22;color:#c0c8ff;font-size:22px;text-align:center;outline:none;letter-spacing:.1em}
+#expr:focus{border-color:#4040c0}
+.row{margin-top:12px;display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+button{padding:9px 22px;border-radius:20px;background:#3030a0;border:none;color:#c0c8ff;font-size:13px;cursor:pointer}
+button:hover{background:#4444c0}
+#status{margin-top:14px;font-size:16px;min-height:24px}
+#status.ok{color:#5ae0a0}#status.no{color:#e05a6a}
+#solution{margin-top:10px;color:#ffd65a;font-size:14px;min-height:20px}
+.big-btn{margin-top:16px;padding:11px 34px;font-size:14px;background:linear-gradient(135deg,#6a4ae0,#9a5ae0);border:none;border-radius:24px;color:#fff}
+footer{font-size:11px;color:#1a1a40;padding:10px}
+</style>
+</head>
+<body>
+<h1>24点</h1>
+<div class="sub">用四张牌计算，通过 + − × ÷ 和括号得出 24，每张牌只能用一次</div>
+<div id="cards"></div>
+<input id="expr" maxlength="40" placeholder="输入算式，如 (5-1)*6" autocomplete="off" />
+<div class="row">
+  <button id="check">验证</button>
+  <button id="solve">求解</button>
+  <button id="next">换一组</button>
+</div>
+<div id="status"></div>
+<div id="solution"></div>
+<button class="big-btn" id="solveAll">🎲 出题（保证有解）</button>
+<footer>经典 24 点数学游戏 · 支持括号嵌套</footer>
+<script>
+"use strict";
+let nums=[];
+const cardsEl=document.getElementById('cards');
+const exprEl=document.getElementById('expr');
+const statusEl=document.getElementById('status'),solEl=document.getElementById('solution');
+function randCard(){return Math.floor(Math.random()*13)+1;}
+function solvable(a,b,c,d){
+  const vals=[a,b,c,d];
+  const found={v:false};
+  function rec(list){
+    if(list.length===1){if(Math.abs(list[0]-24)<1e-9)found.v=true;return;}
+    for(let i=0;i<list.length&&!found.v;i++)for(let j=0;j<list.length;j++){
+      if(i===j)continue;
+      const rest=list.filter((_,k)=>k!==i&&k!==j);
+      const x=list[i],y=list[j];
+      const combos=[x+y,x-y,y-x,x*y];
+      if(Math.abs(y)>1e-9)combos.push(x/y);
+      if(Math.abs(x)>1e-9)combos.push(y/x);
+      for(const v of combos){rec([...rest,v]);if(found.v)return;}
+    }
+  }
+  rec(vals);return found.v;
+}
+function generate(){
+  for(let k=0;k<300;k++){const a=randCard(),b=randCard(),c=randCard(),d=randCard();if(solvable(a,b,c,d)){nums=[a,b,c,d];break;}}
+  renderCards();exprEl.value='';statusEl.className='';statusEl.textContent='';solEl.textContent='';
+}
+function renderCards(){cardsEl.innerHTML='';nums.forEach(n=>{const d=document.createElement('div');d.className='card';d.textContent=n;cardsEl.appendChild(d);});}
+function used(numsE){
+  const tokens=exprEl.value.match(/\d+/g)||[];
+  const available=numsE.slice();
+  for(const t of tokens){const idx=available.indexOf(+t);if(idx<0)return{ok:false,msg:'含有不在这四张牌中的数字：'+t};available.splice(idx,1);}
+  return{ok:true,left:available};
+}
+function evaluate(expr){
+  try{
+    const r=Function(`"use strict";return (${expr})`)();
+    return (typeof r==='number'&&isFinite(r))?r:null;
+  }catch(e){return null;}
+}
+document.getElementById('check').addEventListener('click',()=>{
+  const expr=exprEl.value.trim();
+  statusEl.className='';
+  if(!expr){statusEl.textContent='请输入算式';statusEl.classList.add('no');return;}
+  if(!/^[0-9+\-*/(). ]+$/.test(expr)){statusEl.textContent='算式含非法字符';statusEl.classList.add('no');return;}
+  const u=used(nums);
+  if(!u.ok){statusEl.classList.add('no');statusEl.textContent=u.msg;return;}
+  // each number must be used exactly once
+  if(u.left.length>0){statusEl.classList.add('no');statusEl.textContent='每个数字恰好用一次，还剩：'+u.left.join(', ');return;}
+  const val=evaluate(expr);
+  if(val===null){statusEl.classList.add('no');statusEl.textContent='算式无法计算';return;}
+  if(Math.abs(val-24)<1e-6){statusEl.classList.add('ok');statusEl.textContent='✅ 正确！24 点达成！';}
+  else{statusEl.classList.add('no');statusEl.textContent=`❌ 结果是 ${fmt(val)}，不是 24`;}
+});
+function fmt(v){return Number.isInteger(v)?v:Math.round(v*1000)/1000;}
+function buildExpr(a,b,c,d){
+  // search for a parenthesized solution returning expression string
+  function rec(list){
+    if(list.length===1){return Math.abs(list[0].v-24)<1e-9?list[0].s:null;}
+    for(let i=0;i<list.length;i++)for(let j=0;j<list.length;j++){
+      if(i===j)continue;
+      const rest=list.filter((_,k)=>k!==i&&k!==j);
+      const{x:{v:x,s:sx},y:{v:y,s:sy}}= {x:list[i],y:list[j]};
+      const combos=[
+        {v:x+y,s:`(${sx}+${sy})`},
+        {v:x-y,s:`(${sx}-${sy})`},
+        {v:y-x,s:`(${sy}-${sx})`},
+        {v:x*y,s:`(${sx}*${sy})`},
+      ];
+      if(Math.abs(y)>1e-9)combos.push({v:x/y,s:`(${sx}/${sy})`});
+      if(Math.abs(x)>1e-9)combos.push({v:y/x,s:`(${sy}/${sx})`});
+      for(const c2 of combos){const res=rec([...rest,c2]);if(res)return res;}
+    }
+    return null;
+  }
+  return rec(nums.map(n=>({v:n,s:String(n)})));
+}
+document.getElementById('solve').addEventListener('click',()=>{
+  const s=buildExpr(...nums);
+  solEl.textContent=s?('解法： '+s+' = 24'):'这组似乎无解（理论上不应该）';
+});
+document.getElementById('next').addEventListener('click',generate);
+document.getElementById('solveAll').addEventListener('click',generate);
+exprEl.addEventListener('keydown',e=>{if(e.key==='Enter')document.getElementById('check').click();});
+generate();
+</script>
+</body>
+</html>
