@@ -69,6 +69,7 @@
   ],
   "redirects": [
     { "source": "/download/7.7z", "destination": "https://github.com/2132141424/waterfish-preview/releases/download/downloads/7.7z", "statusCode": 302 },
-    { "source": "/download/12.zip", "destination": "https://github.com/2132141424/waterfish-preview/releases/download/downloads/12.zip", "statusCode": 302 }
+    { "source": "/download/12.zip", "destination": "https://github.com/2132141424/waterfish-preview/releases/download/downloads/12.zip", "statusCode": 302 },
+    { "source": "/download/2.zip", "destination": "https://github.com/2132141424/waterfish-preview/releases/download/downloads/2.zip", "statusCode": 302 }
   ]
 }
