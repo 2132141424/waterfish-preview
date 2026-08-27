@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<!--
+  Gomoku (Five in a Row) - Single-file, offline-playable
+  MIT License
+  Copyright (c) 2026 Original implementation for a static navigation site.
+
+  Permission is hereby granted, free of charge, to any person obtaining a copy
+  of this software and associated documentation files (the "Software"), to deal
+  in the Software without restriction, including without limitation the rights
+  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  copies of the Software, and to permit persons to whom the Software is
+  furnished to do so, subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in all
+  copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+-->
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>五子棋 · Gomoku</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #1a2c1f;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    color: #e8e0c8;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+  }
+  h1 { font-size: 26px; letter-spacing: 2px; color: #f5deb3; margin-bottom: 4px; }
+  #status {
+    min-height: 26px; font-size: 16px; font-weight: 600; margin: 8px 0 4px;
+    color: #ffd700;
+  }
+  #board-wrap {
+    background: #d9a654;
+    padding: 14px;
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.5);
+  }
+  canvas { display: block; background: #e0b96a; cursor: pointer; border-radius: 6px; }
+  #controls { margin-top: 14px; display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  button {
+    font-size: 14px; padding: 8px 18px; border: none; border-radius: 8px;
+    cursor: pointer; background: #3b5b40; color: #f4ead0; transition: .15s;
+  }
+  button:hover { background: #4f7a55; }
+  button.active { background: #ffb347; color: #2a2a1a; }
+  select {
+    font-size: 14px; padding: 8px 12px; border-radius: 8px; border: none;
+    background: #3b5b40; color: #f4ead0; cursor: pointer;
+  }
+  #help {
+    margin-top: 14px; max-width: 520px; font-size: 13px; line-height: 1.6;
+    color: #c8bfa0; text-align: center;
+  }
+  #help b { color: #ffd700; }
+</style>
+</head>
+<body>
+<h1>五子棋 · Gomoku</h1>
+<div id="status">黑方先手 · 请落子</div>
+<div id="board-wrap">
+  <canvas id="board" width="540" height="540"></canvas>
+</div>
+<div id="controls">
+  <select id="mode">
+    <option value="pvp">双人对战</option>
+    <option value="ai">人机对战</option>
+  </select>
+  <button id="undo">悔棋</button>
+  <button id="restart">重新开始</button>
+</div>
+<div id="help">
+  点击棋盘交叉点落子。<b>黑方</b>先手，任意方向（横、竖、斜）先连成 <b>5 子</b>者获胜。
+  人机模式下由电脑执白。<b>悔棋</b>可撤销最后一步；游戏结束后点击<b>重新开始</b>。
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var SIZE = 15;
+  var CELL = 36, MARGIN = CELL / 2;
+  var canvas = document.getElementById('board');
+  var ctx = canvas.getContext('2d');
+  canvas.width = MARGIN * 2 + (SIZE - 1) * CELL;
+  canvas.height = MARGIN * 2 + (SIZE - 1) * CELL;
+
+  var EMPTY = 0, BLACK = 1, WHITE = 2;
+  var board = [];          // board[r][c] -> EMPTY | BLACK | WHITE
+  var history = [];        // [{r,c,player}] for undo
+  var turn = BLACK;
+  var gameOver = false;
+  var vsAI = false;
+
+  var statusEl = document.getElementById('status');
+  var modeSel = document.getElementById('mode');
+
+  function initBoard() {
+    board = [];
+    for (var r = 0; r < SIZE; r++) {
+      board.push(new Array(SIZE).fill(EMPTY));
+    }
+    history = [];
+    turn = BLACK;
+    gameOver = false;
+    setStatus('黑方先手 · 请落子');
+    draw();
+  }
+
+  function setStatus(t) { statusEl.textContent = t; }
+
+  function playerName(p) { return p === BLACK ? '黑方' : '白方'; }
+
+  // ---- Drawing ----
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // wooden board background
+    ctx.fillStyle = '#e0b96a';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    // grid lines
+    ctx.strokeStyle = '#6b4f1f';
+    ctx.lineWidth = 1;
+    for (var i = 0; i < SIZE; i++) {
+      var pos = MARGIN + i * CELL;
+      ctx.beginPath();
+      ctx.moveTo(MARGIN, pos); ctx.lineTo(MARGIN + (SIZE - 1) * CELL, pos);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(pos, MARGIN); ctx.lineTo(pos, MARGIN + (SIZE - 1) * CELL);
+      ctx.stroke();
+    }
+    // star points
+    ctx.fillStyle = '#6b4f1f';
+    [[3,3],[3,11],[11,3],[11,11],[7,7]].forEach(function (pt) {
+      ctx.beginPath();
+      ctx.arc(MARGIN + pt[0] * CELL, MARGIN + pt[1] * CELL, 3, 0, Math.PI * 2);
+      ctx.fill();
+    });
+    // stones
+    for (var r = 0; r < SIZE; r++) {
+      for (var c = 0; c < SIZE; c++) {
+        if (board[r][c] === BLACK) drawStone(MARGIN + c * CELL, MARGIN + r * CELL, BLACK);
+        else if (board[r][c] === WHITE) drawStone(MARGIN + c * CELL, MARGIN + r * CELL, WHITE);
+      }
+    }
+    // last move marker
+    if (history.length > 0) {
+      var last = history[history.length - 1];
+      var lx = MARGIN + last.c * CELL, ly = MARGIN + last.r * CELL;
+      ctx.strokeStyle = '#ff0000';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(lx, ly, 6, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  }
+
+  function drawStone(x, y, player) {
+    var grad = ctx.createRadialGradient(x - 4, y - 4, 2, x, y, CELL * 0.45);
+    if (player === BLACK) {
+      grad.addColorStop(0, '#55555c');
+      grad.addColorStop(1, '#0a0a0d');
+    } else {
+      grad.addColorStop(0, '#ffffff');
+      grad.addColorStop(1, '#c8c8c8');
+    }
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(x, y, CELL * 0.42, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = player === BLACK ? '#000' : '#999';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+
+  // ---- Mouse input ----
+  canvas.addEventListener('click', function (e) {
+    if (gameOver) return;
+    // if it's the AI's turn in AI mode, ignore clicks
+    if (vsAI && turn === WHITE) return;
+    var rect = canvas.getBoundingClientRect();
+    var px = e.clientX - rect.left;
+    var py = e.clientY - rect.top;
+    var scaleX = canvas.width / rect.width;
+    var scaleY = canvas.height / rect.height;
+    var gx = Math.round((px * scaleX - MARGIN) / CELL);
+    var gy = Math.round((py * scaleY - MARGIN) / CELL);
+    if (gx < 0 || gx >= SIZE || gy < 0 || gy >= SIZE) return;
+    if (board[gy][gx] !== EMPTY) return;
+    placeStone(gy, gx);
+  });
+
+  function placeStone(r, c) {
+    board[r][c] = turn;
+    history.push({ r: r, c: c, player: turn });
+    draw();
+    if (checkWin(r, c)) {
+      gameOver = true;
+      setStatus(playerName(turn) + ' 获胜！ 点击「重新开始」再来一局');
+      return;
+    }
+    if (history.length === SIZE * SIZE) {
+      gameOver = true;
+      setStatus('平局（棋盘已满）');
+      return;
+    }
+    // switch turn
+    turn = (turn === BLACK) ? WHITE : BLACK;
+    if (vsAI && turn === WHITE && !gameOver) {
+      setStatus('白方（电脑）思考中…');
+      setTimeout(aiMove, 250);
+    } else {
+      setStatus(playerName(turn) + ' 落子');
+    }
+  }
+
+  // ---- Win detection ----
+  var DIRS = [[1,0],[0,1],[1,1],[1,-1]];
+  function checkWin(r, c) {
+    var p = board[r][c];
+    if (!p) return false;
+    for (var i = 0; i < DIRS.length; i++) {
+      var dr = DIRS[i][0], dc = DIRS[i][1];
+      var count = 1;
+      // forward
+      count += countDir(r, c, dr, dc, p);
+      // backward
+      count += countDir(r, c, -dr, -dc, p);
+      if (count >= 5) return true;
+    }
+    return false;
+  }
+  function countDir(r, c, dr, dc, p) {
+    var n = 0;
+    var nr = r + dr, nc = c + dc;
+    while (nr >= 0 && nr < SIZE && nc >= 0 && nc < SIZE && board[nr][nc] === p) {
+      n++;
+      nr += dr; nc += dc;
+    }
+    return n;
+  }
+
+  // ---- Simple AI ----
+  function aiMove() {
+    var empties = [];
+    for (var r = 0; r < SIZE; r++)
+      for (var c = 0; c < SIZE; c++)
+        if (board[r][c] === EMPTY) empties.push([r, c]);
+    if (empties.length === 0) return;
+    var best = pickAIMove(empties, WHITE);
+    placeStone(best[0], best[1]);
+  }
+
+  // Choose randomly among empty cells, weighted toward cells adjacent to existing stones.
+  function pickAIMove(empties, player) {
+    // 1) If it can win now, take it.
+    var win = findWinningMove(player);
+    if (win) return win;
+    // 2) If opponent has an immediate win next move, block it.
+    var block = findWinningMove(player === BLACK ? WHITE : BLACK);
+    if (block) return block;
+    // 3) Otherwise random move within neighborhood of existing stones (or any).
+    var placed = [];
+    for (var r = 0; r < SIZE; r++)
+      for (var c = 0; c < SIZE; c++)
+        if (board[r][c] !== EMPTY) placed.push([r, c]);
+    if (placed.length === 0) return empties[Math.floor(Math.random() * empties.length)];
+    var candidates = [];
+    var seen = {};
+    placed.forEach(function (p) {
+      for (var dr = -2; dr <= 2; dr++)
+        for (var dc = -2; dc <= 2; dc++) {
+          var nr = p[0] + dr, nc = p[1] + dc;
+          if (nr < 0 || nr >= SIZE || nc < 0 || nc >= SIZE) continue;
+          if (board[nr][nc] !== EMPTY) continue;
+          var key = nr + ',' + nc;
+          if (seen[key]) continue;
+          seen[key] = true;
+          candidates.push([nr, nc]);
+        }
+    });
+    if (candidates.length === 0) return empties[Math.floor(Math.random() * empties.length)];
+    return candidates[Math.floor(Math.random() * candidates.length)];
+  }
+
+  function findWinningMove(player) {
+    for (var r = 0; r < SIZE; r++)
+      for (var c = 0; c < SIZE; c++) {
+        if (board[r][c] !== EMPTY) continue;
+        board[r][c] = player;
+        var won = checkWin(r, c);
+        board[r][c] = EMPTY;
+        if (won) return [r, c];
+      }
+    return null;
+  }
+
+  // ---- Controls ----
+  document.getElementById('restart').addEventListener('click', initBoard);
+
+  document.getElementById('undo').addEventListener('click', function () {
+    if (gameOver) return;
+    // In AI mode, undo the pair (AI + human) so it becomes the human's turn.
+    var n = vsAI ? 2 : 1;
+    for (var i = 0; i < n && history.length > 0; i++) {
+      var mv = history.pop();
+      board[mv.r][mv.c] = EMPTY;
+    }
+    turn = (history.length % 2 === 0) ? BLACK : WHITE;
+    draw();
+    if (vsAI && turn === WHITE) {
+      setStatus('白方（电脑）思考中…');
+      setTimeout(aiMove, 250);
+    } else {
+      setStatus(playerName(turn) + ' 落子');
+    }
+  });
+
+  modeSel.addEventListener('change', function () {
+    vsAI = (modeSel.value === 'ai');
+    initBoard();
+  });
+
+  initBoard();
+})();
+</script>
+</body>
+</html>
