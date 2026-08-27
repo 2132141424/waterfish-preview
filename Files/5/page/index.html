@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>舒尔特方格训练</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: "Microsoft YaHei", sans-serif;
+        }
+
+        /* 极简渐变背景 */
+        body {
+            min-height: 100vh;
+            background: linear-gradient(135deg, #e0f7fa 0%, #f5f5f5 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 15px;
+        }
+
+        /* 极简卡片容器 */
+        .container {
+            background: #ffffff;
+            border-radius: 16px;
+            padding: 25px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            text-align: center;
+            max-width: 420px;
+            width: 100%;
+        }
+
+        /* 极简标题 */
+        .title {
+            font-size: 26px;
+            color: #222;
+            margin-bottom: 6px;
+            font-weight: 600;
+        }
+
+        .subtitle {
+            font-size: 13px;
+            color: #888;
+            margin-bottom: 20px;
+        }
+
+        /* 控制按钮 */
+        .control-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 18px;
+            justify-content: center;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 8px;
+            font-size: 15px;
+            cursor: pointer;
+            transition: 0.2s ease;
+            font-weight: 500;
+        }
+
+        .mode-btn {
+            background: #f1f1f1;
+            color: #555;
+        }
+
+        .mode-btn.active {
+            background: #4fc3f7;
+            color: white;
+        }
+
+        .reset-btn {
+            background: #ff8a65;
+            color: white;
+        }
+
+        .btn:hover {
+            opacity: 0.9;
+        }
+
+        /* 信息面板 */
+        .info-group {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 20px;
+        }
+
+        .info-item {
+            padding: 6px 12px;
+            background: #f9f9f9;
+            border-radius: 8px;
+            min-width: 110px;
+        }
+
+        .info-label {
+            color: #777;
+            font-size: 12px;
+        }
+
+        .info-value {
+            color: #222;
+            font-weight: bold;
+            font-size: 18px;
+        }
+
+        /* 方格容器 */
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 8px;
+            aspect-ratio: 1/1;
+            margin-bottom: 15px;
+            position: relative;
+        }
+
+        /* 方格样式 */
+        .grid-item {
+            background: #f9f9f9;
+            border-radius: 10px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 20px;
+            font-weight: 600;
+            color: #333;
+            cursor: pointer;
+            transition: 0.2s ease;
+            user-select: none;
+            z-index: 1;
+        }
+
+        /* 正确/错误反馈 */
+        .grid-item.correct {
+            background: #81c784 !important;
+            color: white !important;
+        }
+
+        .grid-item.wrong {
+            background: #e57373 !important;
+            color: white !important;
+            animation: shake 0.3s ease;
+        }
+
+        /* 动态干扰元素 */
+        .disturb-item {
+            position: absolute;
+            font-size: 14px;
+            color: #d0d0d0;
+            pointer-events: none;
+            z-index: 0;
+            animation: fade 1s ease;
+        }
+
+        /* 抖动动画 */
+        @keyframes shake {
+            0%,100%{transform:translateX(0);}
+            25%{transform:translateX(-2px);}
+            75%{transform:translateX(2px);}
+        }
+
+        /* 干扰淡入淡出 */
+        @keyframes fade {
+            0%{opacity:0; transform:scale(0.5);}
+            50%{opacity:1; transform:scale(1);}
+            100%{opacity:0; transform:scale(0.5);}
+        }
+
+        .tip {
+            font-size: 12px;
+            color: #aaa;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="title">舒尔特方格</h1>
+        <p class="subtitle">5×5标准训练 | 提升专注力</p>
+
+        <div class="control-group">
+            <button class="btn mode-btn active" id="normalMode">标准模式</button>
+            <button class="btn mode-btn" id="disturbMode">干扰模式</button>
+            <button class="btn reset-btn" id="resetBtn">重置</button>
+        </div>
+
+        <div class="info-group">
+            <div class="info-item">
+                <div class="info-label">计时</div>
+                <div class="info-value" id="timer">00:00.000</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">评级</div>
+                <div class="info-value" id="level">未完成</div>
+            </div>
+        </div>
+
+        <div class="grid" id="grid"></div>
+        <p class="tip">按顺序点击数字 1-25，开始即计时</p>
+    </div>
+
+    <script>
+        const grid = document.getElementById('grid');
+        const timerEl = document.getElementById('timer');
+        const levelEl = document.getElementById('level');
+        const resetBtn = document.getElementById('resetBtn');
+        const normalModeBtn = document.getElementById('normalMode');
+        const disturbModeBtn = document.getElementById('disturbMode');
+        
+        let startTime = null;
+        let timer = null;
+        let currentNum = 1;
+        let isDisturb = false;
+        let numArr = [];
+        let disturbTimer = null; // 动态干扰定时器
+
+        // 干扰库
+        const disturbChars = ['○', '△', '◇', '□', '✦', '▷', '▽', '☆']; // 几何图形
+        const disturbTexts = ['?', '!', '×', '÷', '=', '+', '#', '@']; // 临时替换文字
+        const disturbColors = ['#fff9c4', '#e1f5fe', '#f3e5f5', '#ffe0b2']; // 干扰变色
+
+        // 生成随机数字
+        function generateNumArr() {
+            numArr = Array.from({length:25}, (_,i)=>i+1);
+            for(let i=numArr.length-1; i>0; i--){
+                const j = Math.floor(Math.random()*(i+1));
+                [numArr[i], numArr[j]] = [numArr[j], numArr[i]];
+            }
+        }
+
+        // 清空所有干扰 + 恢复方格原始状态
+        function clearDisturb() {
+            // 清除几何干扰
+            document.querySelectorAll('.disturb-item').forEach(item => item.remove());
+            // 清除干扰定时器
+            if(disturbTimer) clearInterval(disturbTimer);
+            // 恢复所有方格样式和文字
+            const items = document.querySelectorAll('.grid-item');
+            items.forEach((item, idx) => {
+                item.style.background = '';
+                item.textContent = numArr[idx];
+            });
+        }
+
+        // 动态生成随机干扰（3种类型：图形/变色/文字）
+        function dynamicDisturb() {
+            clearDisturb();
+            // 随机时间间隔生成干扰（500-2000毫秒）
+            disturbTimer = setInterval(() => {
+                // 未点击的方格（用于几何/变色干扰）
+                const normalItems = document.querySelectorAll('.grid-item:not(.correct)');
+                // 已点击正确的方格（仅用于文字修改干扰）
+                const correctItems = document.querySelectorAll('.grid-item.correct');
+                
+                // 随机触发一种干扰
+                const type = Math.floor(Math.random() * 3);
+                switch(type) {
+                    // 1. 几何图形干扰（未点击方格）
+                    case 0:
+                        if(normalItems.length === 0) return;
+                        const disturb = document.createElement('div');
+                        disturb.className = 'disturb-item';
+                        disturb.textContent = disturbChars[Math.floor(Math.random()*disturbChars.length)];
+                        disturb.style.left = Math.random()*95 + '%';
+                        disturb.style.top = Math.random()*95 + '%';
+                        grid.appendChild(disturb);
+                        setTimeout(() => disturb.remove(), 1000);
+                        break;
+
+                    // 2. 方格变色干扰（未点击方格）
+                    case 1:
+                        if(normalItems.length === 0) return;
+                        const randomItem = normalItems[Math.floor(Math.random() * normalItems.length)];
+                        const originalBg = randomItem.style.background;
+                        randomItem.style.background = disturbColors[Math.floor(Math.random()*disturbColors.length)];
+                        setTimeout(() => randomItem.style.background = originalBg, 800);
+                        break;
+
+                    // 3. 文字修改干扰（已点击方格 ✅ 核心修改）
+                    case 2:
+                        if(correctItems.length === 0) return;
+                        const correctItem = correctItems[Math.floor(Math.random() * correctItems.length)];
+                        const originalText = correctItem.textContent;
+                        correctItem.textContent = disturbTexts[Math.floor(Math.random()*disturbTexts.length)];
+                        setTimeout(() => correctItem.textContent = originalText, 800);
+                        break;
+                }
+            }, Math.random()*1500 + 500);
+        }
+
+        // 渲染方格
+        function renderGrid() {
+            grid.innerHTML = '';
+            generateNumArr();
+            currentNum = 1;
+            clearDisturb();
+            
+            // 干扰模式：启动动态干扰
+            if(isDisturb) dynamicDisturb();
+
+            numArr.forEach(num => {
+                const item = document.createElement('div');
+                item.className = 'grid-item';
+                item.textContent = num;
+                item.addEventListener('click', () => checkNum(item, num));
+                grid.appendChild(item);
+            });
+        }
+
+        // 校验数字
+        function checkNum(item, num) {
+            if(!startTime) {
+                startTime = Date.now();
+                startTimer();
+            }
+
+            if(num === currentNum) {
+                item.classList.add('correct');
+                currentNum++;
+                if(currentNum > 25) {
+                    stopTimer();
+                    setLevel();
+                    clearDisturb(); // 完成后停止所有干扰
+                    alert(`🎉 完成！用时：${timerEl.textContent}\n评级：${levelEl.textContent}`);
+                }
+            } else {
+                item.classList.add('wrong');
+                setTimeout(() => item.classList.remove('wrong'), 300);
+            }
+        }
+
+        // 计时功能
+        function startTimer() {
+            timer = setInterval(() => {
+                const elapsed = Date.now() - startTime;
+                const ms = elapsed % 1000;
+                const sec = Math.floor(elapsed / 1000) % 60;
+                const min = Math.floor(elapsed / 60000);
+                timerEl.textContent = `${min.toString().padStart(2,'0')}:${sec.toString().padStart(2,'0')}.${ms.toString().padStart(3,'0')}`;
+            }, 1);
+        }
+
+        function stopTimer() {
+            clearInterval(timer);
+            timer = null;
+        }
+
+        // 评级
+        function setLevel() {
+            const totalSec = (Date.now() - startTime) / 1000;
+            if(totalSec <= 15) levelEl.textContent = '🏆 优秀';
+            else if(totalSec <= 20) levelEl.textContent = '👍 良好';
+            else if(totalSec <= 25) levelEl.textContent = '✅ 合格';
+            else levelEl.textContent = '💪 待提升';
+        }
+
+        // 重置
+        function resetGame() {
+            stopTimer();
+            startTime = null;
+            timerEl.textContent = '00:00.000';
+            levelEl.textContent = '未完成';
+            renderGrid();
+        }
+
+        // 切换模式
+        function switchMode(mode) {
+            isDisturb = mode;
+            normalModeBtn.classList.toggle('active', !mode);
+            disturbModeBtn.classList.toggle('active', mode);
+            resetGame();
+        }
+
+        // 事件绑定
+        resetBtn.addEventListener('click', resetGame);
+        normalModeBtn.addEventListener('click', () => switchMode(false));
+        disturbModeBtn.addEventListener('click', () => switchMode(true));
+
+        // 初始化
+        renderGrid();
+    </script>
+</body>
+</html>

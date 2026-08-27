@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>正在跳转到资源导航主页…</title>
+  <meta http-equiv="refresh" content="0; url=https://ziyuan.waterfish.ren" />
+  <script>
+    window.location.replace('https://ziyuan.waterfish.ren')
+  </script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #f6f8fb;
+      color: #333;
+    }
+    .card {
+      text-align: center;
+      padding: 40px 48px;
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+    }
+    .card h1 { font-size: 20px; margin-bottom: 12px; }
+    .card p { color: #888; font-size: 14px; }
+    .card a { color: #2563eb; text-decoration: none; }
+    .spinner {
+      display: inline-block;
+      width: 28px; height: 28px;
+      border: 3px solid rgba(37, 99, 235, 0.2);
+      border-top-color: #2563eb;
+      border-radius: 50%;
+      margin-bottom: 18px;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="spinner"></div>
+    <h1>正在跳转到资源导航主页</h1>
+    <p>如果没有自动跳转，请点击 <a href="https://ziyuan.waterfish.ren">这里进入资源导航</a></p>
+  </div>
+</body>
+</html>
