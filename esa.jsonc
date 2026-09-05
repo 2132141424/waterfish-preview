@@ -1,0 +1,9 @@
+{
+  "name": "waterfish-resources",
+  "installCommand": "",
+  "buildCommand": "",
+  "assets": {
+    "directory": ".",
+    "notFoundStrategy": "404Page"
+  }
+}
