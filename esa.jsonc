@@ -1,7 +1,7 @@
 {
   "name": "waterfish-resources",
   "installCommand": "",
-  "buildCommand": "",
+  "buildCommand": "echo skip",
   "assets": {
     "directory": ".",
     "notFoundStrategy": "404Page"
